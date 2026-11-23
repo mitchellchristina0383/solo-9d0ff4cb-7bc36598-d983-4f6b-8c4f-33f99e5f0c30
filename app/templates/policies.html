@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}策略{% endblock %}
+{% block content %}
+<div class="grid cols-2">
+  <div class="card">
+    <h2>发布新策略版本</h2>
+    <p class="sub">策略始终版本化；新版本只影响之后开始的校验。进行中的校验继续使用开始时捕获的策略快照。</p>
+    <form method="post" action="/policies">
+      <div class="check">
+        <input type="checkbox" id="require_provenance" name="require_provenance" checked>
+        <label for="require_provenance">要求构建来源已核验（source_status = verified）</label>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="require_signature" name="require_signature" checked>
+        <label for="require_signature">要求签名已验证（signature_status = verified）</label>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <label for="required_signer">限定签名者（可选）</label>
+          <input type="text" id="required_signer" name="required_signer" placeholder="仅在要求签名时生效">
+        </div>
+        <div class="field">
+          <label for="actor">发布人</label>
+          <input type="text" id="actor" name="actor" value="{{ default_actor }}">
+        </div>
+      </div>
+      <div class="row full" style="margin-top:10px;">
+        <div class="field">
+          <label for="note">变更说明</label>
+          <textarea id="note" name="note" placeholder="例：收紧签名要求，纳入指定签名者"></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit">发布策略</button>
+        <span class="muted">当前：{{ current.label }}</span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>当前生效策略</h2>
+    <p class="sub">{{ current.note or '无策略说明' }} · {{ current.created_by }} · {{ current.created_at|fmt_ts }}</p>
+    <ul class="muted" style="margin:0; padding-left:18px;">
+      {% for line in current.expectations %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    <div class="snap" style="margin-top:14px;">{{ current | tojson(indent=2) }}</div>
+  </div>
+</div>
+
+<h2 class="section">策略版本历史 <span class="count">{{ policies|length }}</span></h2>
+<div class="card flush">
+  <table>
+    <thead><tr><th>版本</th><th>要求来源</th><th>要求签名</th><th>限定签名者</th><th>说明</th><th>发布人</th><th>发布时间</th></tr></thead>
+    <tbody>
+      {% for p in policies %}
+      <tr>
+        <td><span class="pill {{ 'ok' if loop.first else 'neutral' }}">v{{ p.version }}{% if loop.first %} · 生效{% endif %}</span></td>
+        <td>{{ '是' if p.require_provenance else '否' }}</td>
+        <td>{{ '是' if p.require_signature else '否' }}</td>
+        <td class="mono">{{ p.required_signer or '—' }}</td>
+        <td class="muted">{{ p.note or '—' }}</td>
+        <td class="muted">{{ p.created_by }}</td>
+        <td class="muted">{{ p.created_at|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

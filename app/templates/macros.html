@@ -1,0 +1,53 @@
+{% macro status_pill(item) %}
+  {% if item.release_id or item.release %}
+    <span class="pill ok">已放行</span>
+  {% elif item.last_status == 'rejected' or item.status == 'rejected' %}
+    <span class="pill bad">已拒绝</span>
+  {% elif item.last_status == 'running' or item.status == 'running' %}
+    <span class="pill warn">校验中</span>
+  {% elif item.last_status == 'aborted' or item.status == 'aborted' %}
+    <span class="pill neutral">已中止</span>
+  {% elif item.last_status == 'allowed' or item.status == 'allowed' %}
+    <span class="pill ok">通过</span>
+  {% else %}
+    <span class="pill neutral">待校验</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro status_badge(status) %}
+  {% if status == 'verified' %}<span class="pill ok">已验证</span>
+  {% elif status == 'unverified' %}<span class="pill warn">未核验</span>
+  {% elif status == 'missing' %}<span class="pill bad">缺失</span>
+  {% elif status == 'invalid' %}<span class="pill bad">无效</span>
+  {% elif status == 'allowed' %}<span class="pill ok">通过</span>
+  {% elif status == 'rejected' %}<span class="pill bad">拒绝</span>
+  {% elif status == 'running' %}<span class="pill warn">进行中</span>
+  {% elif status == 'aborted' %}<span class="pill neutral">中止</span>
+  {% else %}<span class="pill neutral">{{ status }}</span>{% endif %}
+{% endmacro %}
+
+{% macro check_rows(checks) %}
+  <div class="checks">
+  {% for c in checks %}
+    <div class="check-row {{ 'pass' if c.passed else 'fail' }}">
+      <span class="icon">{{ '✓' if c.passed else '✕' }}</span>
+      <span class="name">{{ c.label }}</span>
+      <span class="detail">{{ c.detail }}</span>
+    </div>
+  {% endfor %}
+  </div>
+{% endmacro %}
+
+{% macro evidence(policy) %}
+  <div class="card">
+    <h2>当前生效策略 <span class="pill neutral">{{ policy.label }}</span></h2>
+    <p class="sub">{{ policy.note or '无策略说明' }} · 发布人 {{ policy.created_by }} · {{ policy.created_at|fmt_ts }}</p>
+    <ul class="muted" style="margin:0; padding-left:18px;">
+      {% for line in policy.expectations %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endmacro %}
+
+{% macro request_link(item) %}
+  <a href="/requests/{{ item.id }}" class="mono">{{ item.id }}</a>
+{% endmacro %}

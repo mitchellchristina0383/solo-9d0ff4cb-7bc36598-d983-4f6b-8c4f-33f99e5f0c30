@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}标签{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>登记 / 改指向标签</h2>
+  <p class="sub">标签只是可变指针，准入结论始终以 digest 为准。改指向会生成新修订，不改变已有请求的快照。</p>
+  <form method="post" action="/tags">
+    <div class="row">
+      <div class="field">
+        <label for="repository">仓库</label>
+        <input type="text" id="repository" name="repository" required
+               list="repo-list" placeholder="registry.example.com/team/app">
+        <datalist id="repo-list">
+          {% for d in digests %}<option value="{{ d.repository }}"></option>{% endfor %}
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="tag">标签</label>
+        <input type="text" id="tag" name="tag" required placeholder="prod">
+      </div>
+      <div class="field">
+        <label for="digest">指向 digest</label>
+        <select id="digest" name="digest" required>
+          <option value="">选择已登记的 digest…</option>
+          {% for d in digests %}
+          <option value="{{ d.digest }}">{{ d.repository }} · {{ d.digest|short_digest }}（{{ d.signature_status }}）</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="actor">操作人</label>
+        <input type="text" id="actor" name="actor" value="{{ default_actor }}">
+      </div>
+    </div>
+    <div class="actions"><button type="submit">保存标签</button></div>
+  </form>
+</div>
+
+<h2 class="section">当前标签 <span class="count">{{ tags|length }}</span></h2>
+<div class="card flush">
+  {% if tags %}
+  <table>
+    <thead><tr><th>仓库 : 标签</th><th>digest</th><th>修订</th><th>来源</th><th>签名</th><th>更新人</th><th>更新时间</th></tr></thead>
+    <tbody>
+      {% for t in tags %}
+      <tr>
+        <td class="mono">{{ t.repository }}:{{ t.tag }}</td>
+        <td class="mono" title="{{ t.digest }}">{{ t.digest|short_digest }}</td>
+        <td><span class="pill neutral">r{{ t.revision }}</span></td>
+        <td>{{ m.status_badge(t.source_status) }}</td>
+        <td>{{ m.status_badge(t.signature_status) }}</td>
+        <td class="muted">{{ t.updated_by }}</td>
+        <td class="muted">{{ t.updated_at|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">还没有标签。先在下方 digest 中选一个并保存标签。</div>
+  {% endif %}
+</div>
+
+<h2 class="section">标签变更历史 <span class="count">最近 25 条</span></h2>
+<div class="card flush">
+  {% if history %}
+  <table>
+    <thead><tr><th>时间</th><th>标签</th><th>动作</th><th>原 digest</th><th>新 digest</th><th>修订</th><th>操作人</th></tr></thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td class="muted">{{ h.created_at|fmt_ts }}</td>
+        <td class="mono">{{ h.repository }}:{{ h.tag }}</td>
+        <td><span class="pill neutral">{{ '登记' if h.action == 'registered' else '改指向' }}</span></td>
+        <td class="mono muted">{{ h.previous_digest|short_digest if h.previous_digest else '—' }}</td>
+        <td class="mono" title="{{ h.digest }}">{{ h.digest|short_digest }}</td>
+        <td class="muted">r{{ h.revision }}</td>
+        <td class="muted">{{ h.actor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">暂无标签变更。</div>
+  {% endif %}
+</div>
+{% endblock %}

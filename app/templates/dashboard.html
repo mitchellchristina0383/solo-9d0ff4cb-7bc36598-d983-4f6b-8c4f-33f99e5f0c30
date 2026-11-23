@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}概览{% endblock %}
+{% block content %}
+<div class="grid cols-4">
+  <div class="card stat"><div class="n">{{ stats.digests }}</div><div class="l">已登记镜像 digest</div></div>
+  <div class="card stat"><div class="n">{{ stats.tags }}</div><div class="l">标签映射</div></div>
+  <div class="card stat"><div class="n">{{ stats.requests }}</div><div class="l">部署请求</div></div>
+  <div class="card stat good"><div class="n">{{ stats.releases }}</div><div class="l">已放行记录</div></div>
+</div>
+
+<div class="grid cols-2" style="margin-top:16px;">
+  <div class="card">
+    <h2>准入工作流</h2>
+    <p class="sub">每步都会在校验开始时固化快照，后续变化不会重写历史结论。</p>
+    <div class="timeline">
+      <div class="tl-item"><div class="tl-dot neutral"></div><div class="tl-line">
+        <div class="tl-head">1. 登记不可变 digest</div>
+        <div class="tl-sub">登记构建来源、签名状态与签名者；digest 是不可变镜像的唯一依据。</div>
+      </div></div>
+      <div class="tl-item"><div class="tl-dot neutral"></div><div class="tl-line">
+        <div class="tl-head">2. 标签指向 digest</div>
+        <div class="tl-sub">标签可反复改指向；每次改动生成修订号与历史，旧请求仍绑定旧 digest。</div>
+      </div></div>
+      <div class="tl-item"><div class="tl-dot neutral"></div><div class="tl-line">
+        <div class="tl-head">3. 提交部署请求</div>
+        <div class="tl-sub">选择标签与环境，可声明期望 digest 作为防呆。</div>
+      </div></div>
+      <div class="tl-item"><div class="tl-dot neutral"></div><div class="tl-line">
+        <div class="tl-head">4. 按策略校验</div>
+        <div class="tl-sub">策略要求引用 digest；来源或签名不合格即拒绝，不写放行记录。</div>
+      </div></div>
+      <div class="tl-item"><div class="tl-dot"></div><div class="tl-line">
+        <div class="tl-head">5. 放行并冻结</div>
+        <div class="tl-sub">仅通过的请求生成放行记录，绑定当时的 digest 与策略版本。</div>
+      </div></div>
+    </div>
+  </div>
+  {{ m.evidence(policy) }}
+</div>
+
+<h2 class="section">最近的部署请求 <span class="count"><a href="/requests">全部 →</a></span></h2>
+<div class="card flush">
+  {% if recent_requests %}
+  <table>
+    <thead><tr><th>请求</th><th>镜像</th><th>环境</th><th>状态</th><th>更新时间</th></tr></thead>
+    <tbody>
+      {% for item in recent_requests %}
+      <tr>
+        <td>{{ m.request_link(item) }}</td>
+        <td class="mono">{{ item.repository }}:{{ item.tag }}</td>
+        <td><span class="pill neutral">{{ item.environment }}</span></td>
+        <td>{{ m.status_pill(item) }}</td>
+        <td class="muted">{{ (item.last_finished_at or item.created_at)|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">还没有部署请求。先登记 digest 与标签，然后 <a href="/requests">提交部署请求</a>。</div>
+  {% endif %}
+</div>
+
+<h2 class="section">最近放行 <span class="count"><a href="/releases">全部 →</a></span></h2>
+<div class="card flush">
+  {% if recent_releases %}
+  <table>
+    <thead><tr><th>放行记录</th><th>镜像</th><th>digest</th><th>策略快照</th><th>时间</th></tr></thead>
+    <tbody>
+      {% for rel in recent_releases %}
+      <tr>
+        <td class="mono">{{ rel.id }}</td>
+        <td class="mono"><a href="/requests/{{ rel.request_id }}">{{ rel.repository }}:{{ rel.tag }}</a></td>
+        <td class="mono" title="{{ rel.digest }}">{{ rel.digest|short_digest }}</td>
+        <td><span class="pill neutral">v{{ rel.policy_version }}</span></td>
+        <td class="muted">{{ rel.released_at|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚无放行记录。</div>
+  {% endif %}
+</div>
+{% endblock %}

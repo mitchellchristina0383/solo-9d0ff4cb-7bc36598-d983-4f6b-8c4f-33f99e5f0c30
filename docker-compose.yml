@@ -1,0 +1,17 @@
+services:
+  admission:
+    build: .
+    image: admission-tool:local
+    container_name: admission-tool
+    ports:
+      - "8000:8000"
+    environment:
+      ADMISSION_DB_PATH: /data/admission.db
+      ADMISSION_VERIFY_DELAY_MS: "800"
+      ADMISSION_DEFAULT_ACTOR: "ops"
+    volumes:
+      - admission-data:/data
+    restart: unless-stopped
+
+volumes:
+  admission-data:

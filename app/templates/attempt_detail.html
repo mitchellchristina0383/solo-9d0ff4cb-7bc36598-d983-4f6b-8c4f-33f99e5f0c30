@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}校验证据{% endblock %}
+{% block content %}
+<p class="muted"><a href="/requests/{{ item.id }}">← 返回部署请求 {{ item.id }}</a></p>
+
+<div class="card">
+  <div class="inline" style="justify-content:space-between;">
+    <h2>第 {{ attempt.attempt_no }} 次校验 · {{ item.repository }}:{{ item.tag }}</h2>
+    {{ m.status_badge(attempt.status) }}
+  </div>
+  <p class="sub">此页展示该次校验开始时固化的证据与判定；任何后续标签/策略变化都不会改写这里的快照。</p>
+  <div class="kv">
+    <span class="k">请求</span><span class="v mono">{{ item.id }}</span>
+    <span class="k">环境</span><span class="v">{{ item.environment }}</span>
+    <span class="k">开始 / 结束</span><span class="v">{{ attempt.started_at|fmt_ts }} → {{ attempt.finished_at|fmt_ts if attempt.finished_at else '—' }}</span>
+    <span class="k">执行人</span><span class="v">{{ attempt.actor }}</span>
+    <span class="k">判定</span>
+    <span class="v">
+      {% if attempt.status == 'allowed' %}<span class="pill ok">通过并生成放行记录</span>
+      {% elif attempt.status == 'rejected' %}<span class="pill bad">拒绝（未生成放行记录）</span>
+      {% else %}<span class="pill warn">{{ attempt.status }}</span>{% endif %}
+    </span>
+  </div>
+</div>
+
+{% if attempt.reasons_obj %}
+<div class="banner error" style="margin-top:16px;">
+  <strong>拒绝原因：</strong>
+  <ul style="margin:6px 0 0; padding-left:18px;">
+    {% for r in attempt.reasons_obj %}<li><strong>{{ r.label }}</strong>：{{ r.detail }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if attempt.drift_obj %}
+<div class="banner" style="margin-top:16px; background: var(--warn-bg); border-color: rgba(210,153,34,.4); color: #f0d58c;">
+  <strong>校验期间观察到以下变化；本次结果仍只使用开始时快照：</strong>
+  <ul style="margin:6px 0 0; padding-left:18px;">
+    {% for d in attempt.drift_obj %}
+    <li>{{ d.label }}：快照 <span class="mono">{{ d.snapshot|short_digest }}</span>，当前 <span class="mono">{{ d.live|short_digest }}</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2 class="section">逐项检查</h2>
+{% if attempt.checks_obj %}
+{{ m.check_rows(attempt.checks_obj) }}
+{% else %}
+<div class="card flush"><div class="empty">该次校验未生成检查明细。</div></div>
+{% endif %}
+
+<h2 class="section">快照证据</h2>
+<div class="grid cols-2">
+  <div class="card">
+    <h2>标签快照</h2>
+    <div class="snap">{{ (attempt.tag_snapshot_obj or {}) | tojson(indent=2) }}</div>
+  </div>
+  <div class="card">
+    <h2>digest 快照</h2>
+    <div class="snap">{{ (attempt.digest_snapshot_obj or {}) | tojson(indent=2) }}</div>
+  </div>
+</div>
+<div class="card" style="margin-top:16px;">
+  <h2>策略快照</h2>
+  <div class="snap">{{ attempt.policy_snapshot_obj | tojson(indent=2) }}</div>
+</div>
+{% endblock %}

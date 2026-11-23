@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}部署请求{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>提交部署请求</h2>
+  <p class="sub">提交只记录意图；真正放行需要执行校验。可选地声明期望 digest，若标签当前指向不一致会直接拒绝。</p>
+  <form method="post" action="/requests">
+    <div class="row">
+      <div class="field">
+        <label for="repository">仓库</label>
+        <input type="text" id="repository" name="repository" required list="tag-repos" placeholder="registry.example.com/team/app">
+        <datalist id="tag-repos">
+          {% for t in tags %}<option value="{{ t.repository }}"></option>{% endfor %}
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="tag">标签</label>
+        <input type="text" id="tag" name="tag" required placeholder="prod">
+      </div>
+      <div class="field">
+        <label for="environment">目标环境</label>
+        <select id="environment" name="environment">
+          {% for env in environments %}<option value="{{ env }}">{{ env }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="expected_digest">期望 digest（可选，防呆）</label>
+        <input type="text" id="expected_digest" name="expected_digest" class="mono" placeholder="sha256:…">
+        <span class="hint">若填写，须与标签当前 digest 完全一致</span>
+      </div>
+      <div class="field">
+        <label for="requested_by">申请人</label>
+        <input type="text" id="requested_by" name="requested_by" value="{{ default_actor }}">
+      </div>
+    </div>
+    <div class="row full" style="margin-top:12px;">
+      <div class="field">
+        <label for="note">备注</label>
+        <textarea id="note" name="note" placeholder="可选：变更单、发布说明"></textarea>
+      </div>
+    </div>
+    <div class="actions"><button type="submit">创建部署请求</button></div>
+  </form>
+</div>
+
+<div class="actions" style="margin-bottom:8px;">
+  {% for label, value in [('全部', ''), ('待校验', 'pending'), ('已拒绝', 'rejected'), ('已放行', 'released'), ('已中止', 'aborted')] %}
+  <a class="pill {{ 'ok' if status_filter == value and value else 'neutral' }}"
+     href="/requests{% if value %}?status={{ value }}{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="card flush">
+  {% if requests %}
+  <table>
+    <thead><tr><th>请求</th><th>镜像</th><th>环境</th><th>校验次数</th><th>状态</th><th>放行 digest</th><th>创建</th></tr></thead>
+    <tbody>
+      {% for item in requests %}
+      <tr>
+        <td>{{ m.request_link(item) }}</td>
+        <td class="mono">{{ item.repository }}:{{ item.tag }}</td>
+        <td><span class="pill neutral">{{ item.environment }}</span></td>
+        <td><span class="pill neutral">{{ item.attempt_count }}</span></td>
+        <td>{{ m.status_pill(item) }}</td>
+        <td class="mono" title="{{ item.released_digest or '' }}">{{ item.released_digest|short_digest if item.released_digest else '—' }}</td>
+        <td class="muted">{{ item.created_at|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">没有符合条件的部署请求。</div>
+  {% endif %}
+</div>
+{% endblock %}

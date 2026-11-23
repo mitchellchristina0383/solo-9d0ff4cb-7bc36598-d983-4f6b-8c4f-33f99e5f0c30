@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_title }}{% endblock %} · {{ app_title }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">⇪</span>
+    <div>
+      <h1>{{ app_title }}</h1>
+      <p class="tagline">按不可变 digest 与策略快照放行，结果不随后续标签/策略变化而改写</p>
+    </div>
+  </div>
+  <nav class="nav">
+    <a href="/" class="{% if nav == 'dashboard' %}active{% endif %}">概览</a>
+    <a href="/digests" class="{% if nav == 'digests' %}active{% endif %}">镜像登记</a>
+    <a href="/tags" class="{% if nav == 'tags' %}active{% endif %}">标签</a>
+    <a href="/policies" class="{% if nav == 'policies' %}active{% endif %}">策略</a>
+    <a href="/requests" class="{% if nav == 'requests' %}active{% endif %}">部署请求</a>
+    <a href="/releases" class="{% if nav == 'releases' %}active{% endif %}">已放行</a>
+  </nav>
+</header>
+<main class="wrap">
+  {% if error %}<div class="banner error"><strong>拒绝/错误：</strong>{{ error }}</div>{% endif %}
+  {% if notice %}<div class="banner ok"><strong>完成：</strong>{{ notice }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="foot">
+  <span>镜像发布准入 · v{{ version }}</span>
+  <span>结果绑定校验开始时的镜像与策略快照</span>
+</footer>
+</body>
+</html>

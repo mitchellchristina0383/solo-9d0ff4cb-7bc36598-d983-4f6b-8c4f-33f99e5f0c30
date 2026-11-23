@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}digest 详情{% endblock %}
+{% block content %}
+<p class="muted"><a href="/digests">← 返回镜像登记</a></p>
+<div class="grid cols-2">
+  <div class="card">
+    <h2>digest 记录</h2>
+    <p class="sub">{{ digest.repository }}</p>
+    <div class="kv">
+      <span class="k">digest</span><span class="v mono">{{ digest.digest }}</span>
+      <span class="k">构建来源</span><span class="v">{{ digest.build_source }}</span>
+      <span class="k">来源状态</span><span class="v">{{ m.status_badge(digest.source_status) }}</span>
+      <span class="k">签名状态</span><span class="v">{{ m.status_badge(digest.signature_status) }}</span>
+      <span class="k">签名者</span><span class="v">{{ digest.signer or '—' }}</span>
+      <span class="k">签名引用</span><span class="v mono">{{ digest.signature_ref or '—' }}</span>
+      <span class="k">备注</span><span class="v">{{ digest.note or '—' }}</span>
+      <span class="k">登记人</span><span class="v">{{ digest.registered_by }}</span>
+      <span class="k">登记时间</span><span class="v">{{ digest.created_at|fmt_ts }}</span>
+      <span class="k">最后更新</span><span class="v">{{ digest.updated_at|fmt_ts }}</span>
+    </div>
+    <form method="post" action="/digests/{{ digest.id }}/delete" class="actions"
+          onsubmit="return confirm('仅在无标签引用时可删除。确认删除该 digest 登记？');">
+      <input type="hidden" name="actor" value="{{ digest.registered_by }}">
+      <button type="submit" class="danger" {% if tags %}disabled title="仍被标签引用"{% endif %}>删除登记</button>
+      {% if tags %}<span class="muted">仍被 {{ tags|length }} 个标签引用，无法删除</span>{% endif %}
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>引用此 digest 的标签</h2>
+    <p class="sub">标签后续可能改指向；此处的放行记录不会随之变化。</p>
+    {% if tags %}
+    <table>
+      <thead><tr><th>标签</th><th>修订</th><th>更新人</th><th>更新时间</th></tr></thead>
+      <tbody>
+        {% for t in tags %}
+        <tr>
+          <td class="mono">{{ t.tag }}</td>
+          <td><span class="pill neutral">{{ t.revision }}</span></td>
+          <td class="muted">{{ t.updated_by }}</td>
+          <td class="muted">{{ t.updated_at|fmt_ts }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">暂无标签引用。</div>
+    {% endif %}
+  </div>
+</div>
+
+<h2 class="section">证据变更历史 <span class="count">{{ history|length }}</span></h2>
+<div class="card flush">
+  {% if history %}
+  <table>
+    <thead><tr><th>时间</th><th>动作</th><th>来源状态</th><th>签名状态</th><th>签名者</th><th>操作人</th></tr></thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td class="muted">{{ h.created_at|fmt_ts }}</td>
+        <td><span class="pill neutral">{{ '登记' if h.action == 'registered' else '更新' }}</span></td>
+        <td class="muted">{{ h.previous_source_status or '—' }} → {{ m.status_badge(h.source_status) }}</td>
+        <td class="muted">{{ h.previous_signature_status or '—' }} → {{ m.status_badge(h.signature_status) }}</td>
+        <td class="muted">{{ h.signer or '—' }}</td>
+        <td class="muted">{{ h.actor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">无变更历史。</div>
+  {% endif %}
+</div>
+{% endblock %}

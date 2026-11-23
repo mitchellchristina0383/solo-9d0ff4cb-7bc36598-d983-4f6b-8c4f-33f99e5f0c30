@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ title }}</h2>
+  <p class="sub">请返回上一页或从导航重新进入。</p>
+  <div class="actions"><a href="/"><button type="button" class="ghost">返回概览</button></a></div>
+</div>
+{% endblock %}

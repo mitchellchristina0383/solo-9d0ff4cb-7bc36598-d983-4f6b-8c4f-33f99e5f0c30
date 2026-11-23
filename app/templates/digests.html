@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}镜像登记{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>登记不可变 digest</h2>
+  <p class="sub">digest 一经登记即作为镜像身份；再次提交同一 digest 视为更新来源/签名证据（会记入变更历史，但不会改变已放行记录的绑定）。</p>
+  <form method="post" action="/digests">
+    <div class="row">
+      <div class="field">
+        <label for="repository">仓库</label>
+        <input type="text" id="repository" name="repository" required placeholder="registry.example.com/team/app">
+        <span class="hint">小写，含 registry 与路径</span>
+      </div>
+      <div class="field">
+        <label for="digest">不可变 digest</label>
+        <input type="text" id="digest" name="digest" required placeholder="sha256:&lt;64 位十六进制&gt;" class="mono">
+        <span class="hint">策略只接受直接引用 digest</span>
+      </div>
+      <div class="field">
+        <label for="build_source">构建来源</label>
+        <input type="text" id="build_source" name="build_source" required placeholder="ci://pipeline/run-1234 @ main">
+        <span class="hint">CI 流水线、提交或构建记录</span>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field">
+        <label for="source_status">来源核验状态</label>
+        <select id="source_status" name="source_status">
+          {% for s in source_statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="signature_status">签名状态</label>
+        <select id="signature_status" name="signature_status">
+          {% for s in signature_statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="signer">签名者</label>
+        <input type="text" id="signer" name="signer" placeholder="cosign identity / 团队">
+      </div>
+      <div class="field">
+        <label for="signature_ref">签名引用</label>
+        <input type="text" id="signature_ref" name="signature_ref" placeholder="透明日志或签名文件 URL">
+      </div>
+      <div class="field">
+        <label for="actor">登记人</label>
+        <input type="text" id="actor" name="actor" value="{{ default_actor }}">
+      </div>
+    </div>
+    <div class="row full" style="margin-top:12px;">
+      <div class="field">
+        <label for="note">备注</label>
+        <textarea id="note" name="note" placeholder="可选：版本、构建说明"></textarea>
+      </div>
+    </div>
+    <div class="actions"><button type="submit">登记 / 更新 digest</button></div>
+  </form>
+</div>
+
+<h2 class="section">已登记 digest <span class="count">{{ digests|length }}</span></h2>
+<div class="card flush">
+  {% if digests %}
+  <table>
+    <thead><tr><th>仓库</th><th>digest</th><th>构建来源</th><th>来源</th><th>签名</th><th>签名者</th><th>标签</th><th>更新</th></tr></thead>
+    <tbody>
+      {% for d in digests %}
+      <tr>
+        <td class="mono">{{ d.repository }}</td>
+        <td class="mono"><a href="/digests/{{ d.id }}" title="{{ d.digest }}">{{ d.digest|short_digest }}</a></td>
+        <td class="muted" style="max-width:260px;">{{ d.build_source }}</td>
+        <td>{{ m.status_badge(d.source_status) }}</td>
+        <td>{{ m.status_badge(d.signature_status) }}</td>
+        <td class="muted">{{ d.signer or '—' }}</td>
+        <td><span class="pill neutral">{{ d.tag_count }}</span></td>
+        <td class="muted">{{ d.updated_at|fmt_ts }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">还没有登记任何 digest。先登记镜像身份才能创建标签。</div>
+  {% endif %}
+</div>
+{% endblock %}
