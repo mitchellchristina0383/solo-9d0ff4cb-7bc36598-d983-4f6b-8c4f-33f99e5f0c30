@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}交接记录 #{{ item.id }}{% endblock %}
+{% block content %}
+<p class="muted"><a href="/handovers">← 返回交接卷</a></p>
+
+<div class="card {% if item.status == 'failed' %}{% endif %}">
+  <div class="inline" style="justify-content:space-between;">
+    <h2>交接记录 #{{ item.id }}</h2>
+    {% if item.status == 'completed' %}<span class="pill ok">已完成</span>
+    {% elif item.status == 'running' %}<span class="pill warn">进行中</span>
+    {% else %}<span class="pill bad">失败（未新增索引项）</span>{% endif %}
+  </div>
+  <p class="sub">放行记录 <span class="mono">{{ item.release_id }}</span> · {{ item.actor }} ·
+    开始 {{ item.started_at|fmt_ts }} · 结束 {{ item.finished_at|fmt_ts if item.finished_at else '—' }}</p>
+  <div class="kv">
+    <span class="k">镜像</span><span class="v mono">{{ item.repository }}:{{ item.tag }}</span>
+    <span class="k">放行 digest</span><span class="v mono">{{ item.release_digest }}</span>
+    <span class="k">交接清单 digest</span><span class="v mono">{{ item.manifest_digest }}</span>
+    {% if item.detail_obj %}
+    <span class="k">目标平台</span><span class="v mono">{{ item.detail_obj.platform or '（原清单即单架构）' }}</span>
+    <span class="k">解析链路</span>
+    <span class="v mono">
+      {% for d in item.detail_obj.resolution_chain %}{{ d|short_digest }}{% if not loop.last %} → {% endif %}{% endfor %}
+    </span>
+    <span class="k">blob 数量</span><span class="v">{{ item.blob_count }}（复用 {{ item.reused_blobs }}）</span>
+    <span class="k">交接字节数</span><span class="v">{{ '{:,}'.format(item.total_bytes) }} 字节</span>
+    <span class="k">索引处理</span>
+    <span class="v">
+      {% if item.detail_obj.already_listed %}目标索引已存在同 digest 描述符，未重复列项
+      {% else %}描述符已原子追加到目标 index.json{% endif %}
+    </span>
+    {% endif %}
+    {% if item.error %}
+    <span class="k">失败原因</span><span class="v" style="color:var(--bad);">{{ item.error }}</span>
+    {% endif %}
+  </div>
+</div>
+
+{% if item.detail_obj and item.detail_obj.blobs %}
+<h2 class="section">实际交接 blob 核对 <span class="count">{{ item.detail_obj.blobs|length }} 个</span></h2>
+<div class="card flush">
+  <table>
+    <thead><tr><th>角色</th><th>摘要</th><th>大小（字节）</th><th>来源</th></tr></thead>
+    <tbody>
+      {% for b in item.detail_obj.blobs %}
+      <tr>
+        <td><span class="pill neutral">{{ b.role }}</span></td>
+        <td class="mono">{{ b.digest }}</td>
+        <td class="muted">{{ '{:,}'.format(b.size) }}</td>
+        <td>{% if b.reused %}<span class="pill ok">卷内已有，复用</span>{% else %}<span class="pill neutral">本次复制并校验</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

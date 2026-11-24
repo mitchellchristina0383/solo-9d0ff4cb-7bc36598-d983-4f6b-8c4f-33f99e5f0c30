@@ -32,13 +32,31 @@ class Settings:
     verify_delay_ms: int = 500
     app_title: str = "镜像发布准入"
     default_actor: str = "ops"
+    handover_source_dir: Path = BASE_DIR / "volumes" / "source"
+    handover_target_dir: Path = BASE_DIR / "volumes" / "handover"
+    handover_platform_os: str = "linux"
+    handover_platform_arch: str = "amd64"
 
     @classmethod
     def from_env(cls) -> "Settings":
         db_path = os.environ.get("ADMISSION_DB_PATH", "").strip()
+        source = os.environ.get("ADMISSION_HANDOVER_SOURCE_DIR", "").strip()
+        target = os.environ.get("ADMISSION_HANDOVER_TARGET_DIR", "").strip()
         return cls(
             db_path=Path(db_path) if db_path else BASE_DIR / "data" / "admission.db",
             verify_delay_ms=_env_int("ADMISSION_VERIFY_DELAY_MS", 500, 0, 10_000),
             app_title=os.environ.get("ADMISSION_APP_TITLE", "镜像发布准入"),
             default_actor=os.environ.get("ADMISSION_DEFAULT_ACTOR", "ops"),
+            handover_source_dir=(
+                Path(source) if source else BASE_DIR / "volumes" / "source"
+            ),
+            handover_target_dir=(
+                Path(target) if target else BASE_DIR / "volumes" / "handover"
+            ),
+            handover_platform_os=os.environ.get("ADMISSION_HANDOVER_PLATFORM_OS", "linux").strip()
+            or "linux",
+            handover_platform_arch=os.environ.get(
+                "ADMISSION_HANDOVER_PLATFORM_ARCH", "amd64"
+            ).strip()
+            or "amd64",
         )

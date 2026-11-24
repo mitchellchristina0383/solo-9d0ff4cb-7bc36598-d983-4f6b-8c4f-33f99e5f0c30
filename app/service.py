@@ -26,6 +26,7 @@ from typing import Any
 
 from .config import Settings
 from .db import connect
+from .handover import HandoverError, HandoverService
 from .rules import (
     Decision,
     DigestRecord,
@@ -54,9 +55,15 @@ class ConflictError(Exception):
 
 
 class Service:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, handover_service: HandoverService | None = None) -> None:
         self.settings = settings
         self.db_path: Path = settings.db_path
+        self.handover_service = handover_service or HandoverService(
+            settings.handover_source_dir,
+            settings.handover_target_dir,
+            platform_os=settings.handover_platform_os,
+            platform_arch=settings.handover_platform_arch,
+        )
 
     # ---------------------------------------------------------------- helpers
     def _connect(self) -> sqlite3.Connection:
@@ -732,6 +739,140 @@ class Service:
         hydrated["tag"] = request["tag"]
         hydrated["environment"] = request["environment"]
         return hydrated
+
+    # --------------------------------------------------------------- handovers
+    def list_handovers(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM handovers ORDER BY id DESC LIMIT 300"
+            ).fetchall()
+        items = [dict(r) for r in rows]
+        for item in items:
+            item["detail_obj"] = read_snapshot(item.get("detail"))
+        return items
+
+    def get_handover(self, handover_id: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM handovers WHERE id = ?", (handover_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        item["detail_obj"] = read_snapshot(item.get("detail"))
+        return item
+
+    def handover_release(
+        self,
+        release_id: str,
+        *,
+        actor: str,
+        copy_hook=None,
+    ) -> dict[str, Any]:
+        """把一条放行记录的镜像交接卷复制。
+
+        分三个短事务：建 running 行 → 执行可能较慢的流式复制 → 写终态。
+        复制失败只留下 failed 审计行，绝不写入索引项；同 digest 重复交接
+        时目标索引天然去重，只列一次。
+        """
+        actor = normalize_actor(actor)
+        now = utc_now()
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                release = conn.execute(
+                    "SELECT * FROM releases WHERE id = ?", (release_id,)
+                ).fetchone()
+                if release is None:
+                    raise ConflictError("放行记录不存在，无法交接")
+                running = conn.execute(
+                    "SELECT id FROM handovers WHERE release_id = ? AND status = 'running'",
+                    (release_id,),
+                ).fetchone()
+                if running is not None:
+                    raise ConflictError("该放行记录已有交接待处理，请等待完成后再看结果")
+                cursor = conn.execute(
+                    """
+                    INSERT INTO handovers
+                        (release_id, repository, tag, release_digest, manifest_digest,
+                         status, actor, started_at)
+                    VALUES (?, ?, ?, ?, ?, 'running', ?, ?)
+                    """,
+                    (
+                        release_id,
+                        release["repository"],
+                        release["tag"],
+                        release["digest"],
+                        release["digest"],
+                        actor,
+                        now,
+                    ),
+                )
+                handover_id = cursor.lastrowid
+                conn.execute("COMMIT")
+            except sqlite3.IntegrityError as exc:
+                conn.execute("ROLLBACK")
+                raise ConflictError("该放行记录已有交接在进行中") from exc
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        result: dict[str, Any] | None = None
+        failure: str | None = None
+        try:
+            result = self.handover_service.handover(dict(release), hook=copy_hook)
+        except HandoverError as exc:
+            failure = str(exc)
+        except OSError as exc:
+            failure = f"交接卷读写失败：{exc}"
+        except Exception as exc:  # 复制中断等任何意外都按失败收口
+            failure = f"交接中断：{exc}"
+
+        finished_at = utc_now()
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                if failure is not None:
+                    conn.execute(
+                        """
+                        UPDATE handovers
+                           SET status = 'failed', error = ?, finished_at = ?
+                         WHERE id = ?
+                        """,
+                        (failure, finished_at, handover_id),
+                    )
+                else:
+                    reused = sum(1 for b in result["blobs"] if b["reused"])
+                    conn.execute(
+                        """
+                        UPDATE handovers
+                           SET status = 'completed', manifest_digest = ?,
+                               blob_count = ?, total_bytes = ?, reused_blobs = ?,
+                               detail = ?, finished_at = ?
+                         WHERE id = ?
+                        """,
+                        (
+                            result["manifest_digest"],
+                            result["blob_count"],
+                            result["total_bytes"],
+                            reused,
+                            json.dumps(result, ensure_ascii=False, sort_keys=True),
+                            finished_at,
+                            handover_id,
+                        ),
+                    )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            row = conn.execute(
+                "SELECT * FROM handovers WHERE id = ?", (handover_id,)
+            ).fetchone()
+        item = dict(row)
+        item["detail_obj"] = read_snapshot(item.get("detail"))
+        if failure is not None:
+            item["failure"] = failure
+        return item
 
     # --------------------------------------------------------------- dashboard
     def stats(self) -> dict[str, int]:

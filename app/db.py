@@ -138,6 +138,31 @@ CREATE TABLE IF NOT EXISTS releases (
 );
 
 CREATE INDEX IF NOT EXISTS ix_releases_repository ON releases (repository, released_at);
+
+CREATE TABLE IF NOT EXISTS handovers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    release_id TEXT NOT NULL REFERENCES releases (id),
+    repository TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    release_digest TEXT NOT NULL,
+    manifest_digest TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+    blob_count INTEGER,
+    total_bytes INTEGER,
+    reused_blobs INTEGER,
+    detail TEXT,
+    error TEXT,
+    actor TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT
+);
+
+-- 同一条放行记录同时只能有一个交接在跑（跨进程/线程生效）。
+CREATE UNIQUE INDEX IF NOT EXISTS ux_handovers_one_running
+    ON handovers (release_id) WHERE status = 'running';
+
+CREATE INDEX IF NOT EXISTS ix_handovers_release ON handovers (release_id, id);
+CREATE INDEX IF NOT EXISTS ix_handovers_manifest ON handovers (manifest_digest);
 """
 
 
@@ -165,7 +190,7 @@ def init_db(db_path: Path | str) -> None:
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.executescript(SCHEMA)
         _seed_default_policy(conn)
-        conn.execute("PRAGMA user_version = 1")
+        conn.execute("PRAGMA user_version = 2")
     finally:
         conn.close()
 

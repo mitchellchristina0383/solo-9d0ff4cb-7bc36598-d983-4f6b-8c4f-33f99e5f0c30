@@ -4,11 +4,12 @@
 {% block content %}
 <div class="card">
   <h2>已放行请求</h2>
-  <p class="sub">每条放行记录都绑定校验开始时的 digest 与策略快照。同标签后续改指向不会覆盖这些记录。</p>
+  <p class="sub">每条放行记录都绑定校验开始时的 digest 与策略快照。同标签后续改指向不会覆盖这些记录。选择一条记录可把该 digest 的单架构清单、配置与层复制到隔离集群交接卷（OCI Image Layout）。</p>
 </div>
 
 <div class="grid cols-2" style="margin-top:16px;">
 {% for rel in releases %}
+  {% set hv = handovers.get(rel.id) %}
   <div class="card" style="border-color: rgba(63,185,80,.35);">
     <div class="inline" style="justify-content:space-between;">
       <h2 class="mono" style="font-size:13px;">{{ rel.id }}</h2>
@@ -29,7 +30,30 @@
       </span>
       <span class="k">标签快照</span>
       <span class="v mono">r{{ rel.tag_snapshot_obj.revision }} → {{ rel.tag_snapshot_obj.digest|short_digest }}</span>
+      <span class="k">交接状态</span>
+      <span class="v">
+        {% if hv %}
+          {% if hv.status == 'completed' %}
+            <span class="pill ok">已交接</span>
+            <a href="/handovers/{{ hv.id }}">记录 #{{ hv.id }}</a>
+          {% elif hv.status == 'running' %}
+            <span class="pill warn">交接中</span>
+          {% else %}
+            <span class="pill bad">上次失败</span>
+            <a href="/handovers/{{ hv.id }}">查看原因</a>
+          {% endif %}
+        {% else %}
+          <span class="pill neutral">未交接</span>
+        {% endif %}
+      </span>
     </div>
+    <form method="post" action="/releases/{{ rel.id }}/handover" class="actions">
+      <input type="hidden" name="actor" value="{{ default_actor }}">
+      <button type="submit" {% if hv and hv.status == 'running' %}disabled{% endif %}>
+        交接此镜像到隔离集群交接卷
+      </button>
+      <span class="muted">流式复制并逐项校验摘要/大小；全部 blob 齐全后才写入目标索引</span>
+    </form>
   </div>
 {% else %}
   <div class="card flush" style="grid-column: 1 / -1;"><div class="empty">尚无放行记录。</div></div>

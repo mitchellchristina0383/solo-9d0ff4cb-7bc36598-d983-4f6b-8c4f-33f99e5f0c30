@@ -322,11 +322,82 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/releases", response_class=HTMLResponse)
-    def releases_page(request: Request) -> HTMLResponse:
+    def releases_page(
+        request: Request, error: str | None = None, notice: str | None = None
+    ) -> HTMLResponse:
+        releases = service.list_releases()
+        handovers = service.list_handovers()
+        latest: dict[str, dict[str, Any]] = {}
+        for item in handovers:
+            latest.setdefault(item["release_id"], item)
         return page(
             request,
             "releases.html",
-            {"nav": "releases", "releases": service.list_releases()},
+            {
+                "nav": "releases",
+                "releases": releases,
+                "handovers": latest,
+                "error": error,
+                "notice": notice,
+            },
+        )
+
+    @app.post("/releases/{release_id}/handover")
+    def create_handover(release_id: str, actor: str = Form("")) -> RedirectResponse:
+        try:
+            item = service.handover_release(release_id, actor=actor)
+        except ConflictError as exc:
+            return redirect("/releases", error=str(exc))
+        if item["status"] == "failed":
+            return redirect(
+                "/releases",
+                error=f"交接失败（未新增索引项，已放行镜像不受影响）：{item.get('error')}",
+            )
+        detail = item.get("detail_obj") or {}
+        if detail.get("already_listed"):
+            notice = (
+                f"目标索引已含该镜像（{item['manifest_digest']}），"
+                f"复用 {item['reused_blobs']} 个 blob，未重复列项"
+            )
+        else:
+            notice = (
+                f"已交接 {item['manifest_digest']}：{item['blob_count']} 个 blob、"
+                f"{item['total_bytes']} 字节，复用 {item['reused_blobs']} 个 blob，索引已更新"
+            )
+        return redirect("/handovers", notice=notice)
+
+    @app.get("/handovers", response_class=HTMLResponse)
+    def handovers_page(
+        request: Request, error: str | None = None, notice: str | None = None
+    ) -> HTMLResponse:
+        return page(
+            request,
+            "handovers.html",
+            {
+                "nav": "handovers",
+                "handovers": service.list_handovers(),
+                "source_dir": settings.handover_source_dir,
+                "target_dir": settings.handover_target_dir,
+                "platform": f"{settings.handover_platform_os}/{settings.handover_platform_arch}",
+                "error": error,
+                "notice": notice,
+            },
+        )
+
+    @app.get("/handovers/{handover_id}", response_class=HTMLResponse)
+    def handover_detail(request: Request, handover_id: int) -> HTMLResponse:
+        item = service.get_handover(handover_id)
+        if item is None:
+            return page(
+                request,
+                "not_found.html",
+                {"nav": "handovers", "title": "交接记录不存在"},
+                status_code=404,
+            )
+        return page(
+            request,
+            "handover_detail.html",
+            {"nav": "handovers", "item": item},
         )
 
     @app.get("/healthz", response_class=HTMLResponse)

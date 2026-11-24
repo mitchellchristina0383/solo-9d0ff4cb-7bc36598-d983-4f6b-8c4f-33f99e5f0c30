@@ -9,9 +9,42 @@ services:
       ADMISSION_DB_PATH: /data/admission.db
       ADMISSION_VERIFY_DELAY_MS: "800"
       ADMISSION_DEFAULT_ACTOR: "ops"
+      ADMISSION_HANDOVER_SOURCE_DIR: /volumes/source
+      ADMISSION_HANDOVER_TARGET_DIR: /volumes/handover
+      ADMISSION_HANDOVER_PLATFORM_OS: "linux"
+      ADMISSION_HANDOVER_PLATFORM_ARCH: "amd64"
     volumes:
       - admission-data:/data
+      - oci-source:/volumes/source
+      - oci-handover:/volumes/handover
+    depends_on:
+      seed:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  # 一次性任务：在源卷生成演示用 OCI Image Layout（单架构 + 多架构 + 大层）。
+  # 用 root 仅为新建卷内目录授权，随后把卷所有权交给 uid 10001 的 app 用户。
+  seed:
+    image: admission-tool:local
+    build: .
+    user: "0:0"
+    command:
+      - sh
+      - -c
+      - |
+        chown -R 10001:10001 /volumes/source /volumes/handover &&
+        python3 -I scripts/seed_layout.py &&
+        chown -R 10001:10001 /volumes/source /volumes/handover
+    environment:
+      SOURCE_OCI_DIR: /volumes/source
+      TARGET_OCI_DIR: /volumes/handover
+      LAYER_BIG_BYTES: "8388608"
+    volumes:
+      - oci-source:/volumes/source
+      - oci-handover:/volumes/handover
+    restart: "no"
 
 volumes:
   admission-data:
+  oci-source:
+  oci-handover:
